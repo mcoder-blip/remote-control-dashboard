@@ -3,27 +3,49 @@ import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Trash2, Move, Send, Clock, Activity, ShieldAlert, Folder, FileText, Terminal } from 'lucide-react';
 
+// Interfaces for better type safety
+interface FileItem {
+  id: string;
+  name: string;
+  path: string;
+  is_dir: boolean;
+}
+
+interface LogEntry {
+  id: string;
+  created_at: string;
+  message: string;
+  level: 'INFO' | 'ERROR';
+}
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export default function Dashboard() {
   const [action, setAction] = useState('DELETE');
   const [path, setPath] = useState('');
   const [dest, setDest] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   
   // New States for integrated features
-  const [fileList, setFileList] = useState([]);
-  const [systemLogs, setSystemLogs] = useState([]);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const [fileList, setFileList] = useState<FileItem[]>([]);
+  const [systemLogs, setSystemLogs] = useState<LogEntry[]>([]);
 
   // 1. Initial Data Fetching
   const fetchData = async () => {
-    const { data: files } = await supabase.from('file_structure').select('*').order('name');
-    const { data: logs } = await supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(20);
-    if (files) setFileList(files);
-    if (logs) setSystemLogs(logs);
+    try {
+      const { data: files, error: fileError } = await supabase.from('file_structure').select('*').order('name');
+      const { data: logs, error: logError } = await supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(20);
+      
+      if (files) setFileList(files);
+      if (logs) setSystemLogs(logs);
+      if (fileError || logError) console.error("Data fetch error:", fileError || logError);
+    } finally {
+      setInitialLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -31,7 +53,7 @@ export default function Dashboard() {
 
     // 2. Realtime Subscriptions (Syncs dashboard with PC Agent)
     const channel = supabase.channel('agent-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'logs' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, (payload) => {
         setSystemLogs(prev => [payload.new, ...prev].slice(0, 20));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'file_structure' }, () => {
@@ -45,16 +67,20 @@ export default function Dashboard() {
   const sendCommand = async () => {
     if (!path) return alert("Select a file from the explorer");
     setLoading(true);
-    const { error } = await supabase.from('commands').insert([
-      { 
-        action_type: action, 
-        payload: { path, dest: action === 'MOVE' ? dest : null },
-        status: 'pending' 
-      }
-    ]);
+    try {
+      const { error } = await supabase.from('commands').insert([
+        { 
+          action_type: action, 
+          payload: { path, dest: action === 'MOVE' ? dest : null },
+          status: 'pending' 
+        }
+      ]);
 
-    if (!error) { setPath(''); setDest(''); }
-    setLoading(false);
+      if (!error) { setPath(''); setDest(''); }
+      else { alert(`Command transmission failed: ${error.message}`); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -68,6 +94,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400">File Explorer</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+            {initialLoading ? <p className="text-slate-600 text-xs animate-pulse">Scanning drives...</p> : 
             {fileList.map((file) => (
               <div 
                 key={file.id}
@@ -78,6 +105,7 @@ export default function Dashboard() {
                 <span className="text-xs font-mono truncate">{file.name}</span>
               </div>
             ))}
+            }
           </div>
         </div>
 
