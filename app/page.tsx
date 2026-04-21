@@ -94,18 +94,20 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400">File Explorer</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
-            {initialLoading ? <p className="text-slate-600 text-xs animate-pulse">Scanning drives...</p> : 
-            {fileList.map((file) => (
-              <div 
-                key={file.id}
-                onClick={() => setPath(file.path)}
-                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${path === file.path ? 'bg-blue-500/10 border-blue-500/50 text-blue-400' : 'hover:bg-white/5 border-transparent text-slate-400'}`}
-              >
-                {file.is_dir ? <Folder size={16} /> : <FileText size={16} />}
-                <span className="text-xs font-mono truncate">{file.name}</span>
-              </div>
-            ))}
-            }
+            {initialLoading ? (
+              <p className="text-slate-600 text-xs animate-pulse">Scanning drives...</p>
+            ) : (
+              fileList.map((file) => (
+                <div 
+                  key={file.id}
+                  onClick={() => setPath(file.path)}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${path === file.path ? 'bg-blue-500/10 border-blue-500/50 text-blue-400' : 'hover:bg-white/5 border-transparent text-slate-400'}`}
+                >
+                  {file.is_dir ? <Folder size={16} /> : <FileText size={16} />}
+                  <span className="text-xs font-mono truncate">{file.name}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
